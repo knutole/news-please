@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(name='news-please',
-      version='1.1.48',
+      version='1.2.41',
       description="news-please is an open source easy-to-use news extractor that just works.",
       long_description="""\
-news-please is an open source, easy-to-use news crawler that extracts structured information from almost any news website. It can follow recursively internal hyperlinks and read RSS feeds to fetch both most recent and also old, archived articles. You only need to provide the root URL of the news website.""",
+news-please is an open source, easy-to-use news crawler that extracts structured information from almost any news website. It can follow recursively internal hyperlinks and read RSS feeds to fetch both most recent and also old, archived articles. You only need to provide the root URL of the news website. Furthermore, its API allows developers to access the exctraction functionality within their software. news-please also implements a workflow optimized for the news archive provided by commoncrawl.org, allowing users to efficiently crawl and extract news articles including various filter options.""",
       classifiers=[
           'Development Status :: 4 - Beta',
           'Environment :: Console',
@@ -48,19 +48,23 @@ news-please is an open source, easy-to-use news crawler that extracts structured
           'readability-lxml>=0.6.2',
           'PyDispatcher>=2.0.5',
           'warcio>=1.3.3',
-          'ago>=0.0.9'
+          'ago>=0.0.9',
+          'six>=1.10.0',
+          'lxml>=3.3.5',
+          'awscli>=1.11.117',
+          'hurry.filesize>=0.9'
       ],
       extras_require={
           ':python_version == "2.7"': [
               'newspaper',
-              'future>=0.16.0'
+              'future>=0.16.0',
+              'hurry.filesize>=0.9'
           ],
           ':python_version >= "3.0"': [
               'newspaper3k',
           ],
           ':sys_platform == "win32"': [
-              'pywin32>=220',
-              'lxml>=3.35'
+              'pywin32>=220'
           ]
       },
       entry_points={

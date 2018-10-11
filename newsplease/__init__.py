@@ -1,12 +1,9 @@
+import datetime
+import os
 import sys
 import urllib
 
-import os
-
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from six.moves import urllib
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
@@ -31,14 +28,16 @@ class NewsPlease:
         """
         html = str(warc_record.raw_stream.read())
         url = warc_record.rec_headers.get_header('WARC-Target-URI')
-        article = NewsPlease.from_html(html, url)
+        download_date = warc_record.rec_headers.get_header('WARC-Date')
+        article = NewsPlease.from_html(html, url=url, download_date=download_date)
         return article
 
     @staticmethod
-    def from_html(html, url=None):
+    def from_html(html, url=None, download_date=None):
         """
         Extracts relevant information from an HTML page given as a string. This function does not invoke scrapy but only
-        uses the article extractor.
+        uses the article extractor. If you have the original URL make sure to provide it as this helps NewsPlease
+        to extract the publishing date and title.
         :param html:
         :param url:
         :return:
@@ -57,50 +56,56 @@ class NewsPlease:
         item['spider_response'] = DotMap()
         item['spider_response'].body = html
         item['url'] = url
-        item['source_domain'] = urlparse(url).hostname.encode() if url != '' else ''.encode()
+        item['source_domain'] = urllib.parse.urlparse(url).hostname.encode() if url != '' else ''.encode()
         item['html_title'] = title_encoded
         item['rss_title'] = title_encoded
         item['local_path'] = None
         item['filename'] = filename
-        item['download_date'] = None
+        item['download_date'] = download_date
         item['modified_date'] = None
         item = extractor.extract(item)
 
-        article = ExtractedInformationStorage.extract_relevant_info(item)
-        return DotMap(article)
+        tmp_article = ExtractedInformationStorage.extract_relevant_info(item)
+        final_article = ExtractedInformationStorage.convert_to_class(tmp_article)
+        return final_article
 
     @staticmethod
-    def from_url(url):
+    def from_url(url, timeout=None):
         """
         Crawls the article from the url and extracts relevant information.
         :param url:
+        :param timeout: in seconds, if None, the urllib default is used
         :return: A dict containing all the information of the article. Else, None.
         """
-        articles = NewsPlease.from_urls([url])
+        articles = NewsPlease.from_urls([url], timeout=timeout)
         if url in articles.keys():
             return articles[url]
         else:
             return None
 
     @staticmethod
-    def from_urls(urls):
+    def from_urls(urls, timeout=None):
         """
         Crawls articles from the urls and extracts relevant information.
         :param urls:
+        :param timeout: in seconds, if None, the urllib default is used
         :return: A dict containing given URLs as keys, and extracted information as corresponding values.
         """
         results = {}
+        download_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         if len(urls) == 0:
+            # Nested blocks of code should not be left empty.
+            # When a block contains a comment, this block is not considered to be empty
             pass
         elif len(urls) == 1:
             url = urls[0]
-            html = SimpleCrawler.fetch_url(url)
-            results[url] = NewsPlease.from_html(html, url)
+            html = SimpleCrawler.fetch_url(url, timeout=timeout)
+            results[url] = NewsPlease.from_html(html, url, download_date)
         else:
             results = SimpleCrawler.fetch_urls(urls)
             for url in results:
-                results[url] = NewsPlease.from_html(results[url], url)
+                results[url] = NewsPlease.from_html(results[url], url, download_date)
 
         return results
 

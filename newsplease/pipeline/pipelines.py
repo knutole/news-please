@@ -9,9 +9,11 @@ import os.path
 import sys
 
 import pymysql
+from dateutil import parser as dateparser
 from elasticsearch import Elasticsearch
 from scrapy.exceptions import DropItem
 
+from NewsArticle import NewsArticle
 from .extractor import article_extractor
 from ..config import CrawlerConfig
 
@@ -98,14 +100,13 @@ class RSSCrawlCompare(object):
             #   otherwise the result will be overwritten in the buffer
             old_version = self.cursor.fetchone()
 
-            if old_version is not None:
+            if old_version is not None and (datetime.datetime.strptime(
+                    item['download_date'], "%y-%m-%d %H:%M:%S") -
+                                            old_version[3]) \
+                    < datetime.timedelta(hours=self.delta_time):
                 # Compare the two download dates. index 3 of old_version
-                #   corresponds to the download_date attribute in the DB
-                if (datetime.datetime.strptime(
-                        item['download_date'], "%y-%m-%d %H:%M:%S") -
-                        old_version[3]) \
-                        < datetime.timedelta(hours=self.delta_time):
-                    raise DropItem("Article in DB too recent. Not saving.")
+                # corresponds to the download_date attribute in the DB
+                raise DropItem("Article in DB too recent. Not saving.")
 
         return item
 
@@ -285,18 +286,18 @@ class ExtractedInformationStorage(object):
         """
         article = {
             'authors': item['article_author'],
-            'date-download': item['download_date'],
-            'date-modify': item['modified_date'],
-            'date-publish': item['article_publish_date'],
+            'date_download': item['download_date'],
+            'date_modify': item['modified_date'],
+            'date_publish': item['article_publish_date'],
             'description': item['article_description'],
             'filename': item['filename'],
-            'image-url': item['article_image'],
+            'image_url': item['article_image'],
             'language': item['article_language'],
             'localpath': item['local_path'],
             'title': item['article_title'],
-            'title-page': ExtractedInformationStorage.ensure_str(item['html_title']),
-            'title-rss': ExtractedInformationStorage.ensure_str(item['rss_title']),
-            'source-domain': ExtractedInformationStorage.ensure_str(item['source_domain']),
+            'title_page': ExtractedInformationStorage.ensure_str(item['html_title']),
+            'title_rss': ExtractedInformationStorage.ensure_str(item['rss_title']),
+            'source_domain': ExtractedInformationStorage.ensure_str(item['source_domain']),
             'text': item['article_text'],
             'url': item['url']
         }
@@ -304,11 +305,37 @@ class ExtractedInformationStorage(object):
         # clean values
         for key in article:
             value = article[key]
-            if isinstance(value, str):
-                if not value:
-                    article[key] = None
+            if isinstance(value, str) and not value:
+                article[key] = None
 
         return article
+
+    @staticmethod
+    def datestring_to_date(text):
+        if text:
+            return dateparser.parse(text)
+        else:
+            return None
+
+    @staticmethod
+    def convert_to_class(item):
+        news_article = NewsArticle()
+        news_article.authors = item['authors']
+        news_article.date_download = ExtractedInformationStorage.datestring_to_date(item['date_download'])
+        news_article.date_modify = ExtractedInformationStorage.datestring_to_date(item['date_modify'])
+        news_article.date_publish = ExtractedInformationStorage.datestring_to_date(item['date_publish'])
+        news_article.description = item['description']
+        news_article.filename = item['filename']
+        news_article.image_url = item['image_url']
+        news_article.language = item['language']
+        news_article.localpath = item['localpath']
+        news_article.title = item['title']
+        news_article.title_page = item['title_page']
+        news_article.title_rss = item['title_rss']
+        news_article.source_domain = item['source_domain']
+        news_article.text = item['text']
+        news_article.url = item['url']
+        return news_article
 
 
 class InMemoryStorage(ExtractedInformationStorage):
@@ -375,7 +402,7 @@ class JsonFileStorage(ExtractedInformationStorage):
 
         # Write JSON to local file system
         with open(file_path, 'w') as file_:
-            json.dump(ExtractedInformationStorage.extract_relevant_info(item), file_)
+            json.dump(ExtractedInformationStorage.extract_relevant_info(item), file_, ensure_ascii=False)
 
         return item
 
@@ -447,7 +474,7 @@ class ElasticsearchStorage(ExtractedInformationStorage):
                 ancestor = None
 
                 # search for previous version
-                request = self.es.search(index=self.index_current, body={'query': {'match': {'url': item['url']}}})
+                request = self.es.search(index=self.index_current, body={'query': {'match': {'url.keyword': item['url']}}})
                 if request['hits']['total'] > 0:
                     # save old version into index_archive
                     old_version = request['hits']['hits'][0]
